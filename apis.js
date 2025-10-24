@@ -7,10 +7,6 @@ const PORT = process.env.PORT || 3000;
 const HOST = '0.0.0.0';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-if (!OPENAI_API_KEY) {
-  console.error('ERROR: Set OPENAI_API_KEY in your environment.');
-  process.exit(1);
-}
 
 const app = express();
 app.use(cors());
