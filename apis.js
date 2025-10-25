@@ -7,6 +7,10 @@ const PORT = process.env.PORT || 3000;
 const HOST = '0.0.0.0';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
+if (!OPENAI_API_KEY) {
+  console.error('ERROR: Set OPENAI_API_KEY in your environment.');
+  process.exit(1);
+}
 
 const app = express();
 app.use(cors());
@@ -51,7 +55,7 @@ const formatTutorResponse = (responseArray) => {
   return { steps, finalAnswer };
 };
 
-// Analyze endpoint
+// Analyze endpoint (requires image + text)
 app.post('/analyze', async (req, res) => {
   const { text, imageUrl } = req.body;
 
@@ -125,7 +129,64 @@ app.post('/analyze', async (req, res) => {
       rawText,
     });
   } catch (err) {
-    console.error('❌ OpenAI API error:', err.message);
+    console.error('OpenAI API error:', err.message);
+    return res.status(err.response?.status || 500).json({
+      success: false,
+      message: err.response?.data?.error?.message || err.message,
+    });
+  }
+});
+
+// Question endpoint (text only)
+app.post('/question', async (req, res) => {
+  const { text } = req.body;
+
+  if (!text) {
+    return res
+      .status(400)
+      .json({ success: false, message: 'Text is required.' });
+  }
+
+  const payload = {
+    model: 'gpt-4o-mini',
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You are a helpful AI tutor. Provide a clear and concise answer to the question. Explain briefly if needed.',
+      },
+      {
+        role: 'user',
+        content: text,
+      },
+    ],
+  };
+
+  try {
+    const resp = await axios.post('https://api.openai.com/v1/chat/completions', payload, {
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 60_000,
+    });
+
+    const answer = resp.data?.choices?.[0]?.message?.content?.trim();
+
+    if (!answer) {
+      return res.status(500).json({
+        success: false,
+        message: 'Unexpected API response structure (no content).',
+        raw: resp.data,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      answer,
+    });
+  } catch (err) {
+    console.error('OpenAI API error:', err.message);
     return res.status(err.response?.status || 500).json({
       success: false,
       message: err.response?.data?.error?.message || err.message,
